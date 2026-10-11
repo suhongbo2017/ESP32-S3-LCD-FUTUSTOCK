@@ -1,0 +1,23 @@
+# ESP-IDF / PlatformIO 构建产物
+build/
+.pio/
+.vscode/
+
+# ESP-IDF 本机配置与下载缓存
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# 本地凭据与临时文件
+secrets.h
+secrets.local.h
+.env
+*.pem
+*.key
+
+# 日志、测试输出和操作系统文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
