@@ -25,9 +25,18 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 3. 增加 1.77 寸屏幕分页和连续滚动实验。
 4. 在目标 S3 硬件上完成编译、烧录和长稳验证。
 
-### 构建配置
+### 构建记录
 
-首次使用前，在 `sdkconfig` 或 `menuconfig` 中配置：
+第一阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证：
+
+```text
+Project build complete.
+esp32s3_gateway.bin binary size 0x22b220
+Smallest app partition is 0x300000
+0xd4de0 bytes (28%) free
+```
+
+当前只完成编译，尚未向 ESP32-S3 实机烧录。
 
 ```text
 Component config -> market_data

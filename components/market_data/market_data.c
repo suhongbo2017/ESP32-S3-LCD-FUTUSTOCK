@@ -178,7 +178,8 @@ static esp_err_t sync_holdings(void)
             continue;
         }
         if (!copy_json_string(item, "name", staged[count].name, sizeof(staged[count].name))) {
-            snprintf(staged[count].name, sizeof(staged[count].name), "%s", staged[count].symbol);
+            memmove(staged[count].name, staged[count].symbol,
+                    strlen(staged[count].symbol) + 1);
         }
         cJSON *cost_item = cJSON_GetObjectItemCaseSensitive(item, "avg_cost");
         staged[count].cost = cJSON_IsNumber(cost_item) ? (float)cost_item->valuedouble : -1.0f;
