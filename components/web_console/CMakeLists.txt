@@ -10,6 +10,6 @@
 idf_component_register(
     SRCS "web_console.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_http_server mdns json driver app_update net_manager ha_mqtt tf_storage app_cfg sensor_history
+    REQUIRES esp_http_server mdns json driver app_update net_manager market_data ha_mqtt tf_storage app_cfg sensor_history
              log esp_timer esp_common freertos
 )

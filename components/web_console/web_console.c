@@ -35,6 +35,7 @@
 #include "esp_heap_caps.h"
 
 #include "net_manager.h"
+#include "market_data.h"
 #include "ha_mqtt.h"
 #include "tf_storage.h"
 #include "app_cfg.h"
@@ -178,6 +179,46 @@ static esp_err_t h_status(httpd_req_t *req)
     cJSON_AddNumberToObject(o, "heap_min", (double)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
     cJSON_AddNumberToObject(o, "heap_block", (double)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     cJSON_AddNumberToObject(o, "psram_free", (double)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+
+    /* 行情快照：复制后再组 JSON，避免网络刷新任务并发修改数据。 */
+    size_t market_capacity = CONFIG_MARKET_DATA_MAX_HOLDINGS;
+    market_holding_t *holdings = calloc(market_capacity, sizeof(*holdings));
+    market_quote_t *quotes = calloc(market_capacity, sizeof(*quotes));
+    cJSON *market = cJSON_AddObjectToObject(o, "market");
+    if (holdings != NULL && quotes != NULL) {
+        size_t market_count = 0;
+        esp_err_t copy_err = market_data_copy_snapshot(holdings, quotes,
+                                                       market_capacity, &market_count);
+        cJSON_AddBoolToObject(market, "ready", copy_err == ESP_OK && market_count > 0);
+        cJSON_AddNumberToObject(market, "holdings", (double)market_count);
+        cJSON_AddNumberToObject(market, "quote_ok", (double)market_data_quote_ok_count());
+        cJSON_AddStringToObject(market, "error", market_data_last_error());
+        cJSON *items = cJSON_AddArrayToObject(market, "items");
+        if (copy_err == ESP_OK) {
+            for (size_t i = 0; i < market_count; i++) {
+                cJSON *item = cJSON_CreateObject();
+                cJSON_AddStringToObject(item, "symbol", holdings[i].symbol);
+                cJSON_AddStringToObject(item, "name", holdings[i].name);
+                cJSON_AddNumberToObject(item, "quantity", holdings[i].quantity);
+                cJSON_AddNumberToObject(item, "cost", holdings[i].cost);
+                cJSON_AddBoolToObject(item, "valid", quotes[i].valid);
+                if (quotes[i].valid) {
+                    cJSON_AddNumberToObject(item, "last", quotes[i].last);
+                    cJSON_AddNumberToObject(item, "change", quotes[i].change);
+                    cJSON_AddNumberToObject(item, "percent", quotes[i].percent);
+                    cJSON_AddStringToObject(item, "quote_time", quotes[i].quote_time);
+                }
+                cJSON_AddItemToArray(items, item);
+            }
+        }
+    } else {
+        cJSON_AddBoolToObject(market, "ready", false);
+        cJSON_AddNumberToObject(market, "holdings", 0);
+        cJSON_AddNumberToObject(market, "quote_ok", 0);
+        cJSON_AddStringToObject(market, "error", "内存不足");
+    }
+    free(holdings);
+    free(quotes);
 #if CONFIG_WEB_CONSOLE_MDNS_ENABLE
     cJSON_AddStringToObject(o, "mdns", CONFIG_WEB_CONSOLE_MDNS_HOSTNAME);
 #endif

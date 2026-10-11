@@ -11,18 +11,19 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 
 ## 当前状态
 
-第二阶段已完成：
+第三阶段已完成：
 
 - 已复制并独立维护 ESP32-S3 Gateway 的 ESP-IDF、ST7735S、LVGL、WiFi、双网和双分区 OTA 基础工程。
 - 已新增 `components/market_data`，使用 `esp_http_client + cJSON` 迁移 futu-tracker 持仓同步和腾讯行情请求。
 - `app_main` 已创建行情刷新任务：网络可用时按 Kconfig 周期同步持仓并拉取行情。
 - LVGL 已改为 `FutuStock` 128x160 行情看板：4 行紧凑行情、5 秒分页，底部显示链路和 IP。
+- Web `/api/status` 已增加 `market` 快照：持仓数量、有效行情数量、错误信息和逐条行情。
 - 行情网络任务与 LVGL 显示任务通过快照复制隔离，网络请求不会在 LVGL 锁内执行。
 
 下一阶段：
 
-1. 在 Web `/api/status` 返回持仓和行情快照，并增加控制端刷新/同步操作。
-2. 在目标 S3 硬件上完成编译、烧录和屏幕显示验证。
+1. 在目标 S3 硬件上完成编译、烧录和屏幕显示验证。
+2. 增加控制端刷新/同步操作。
 3. 单独验证 1.77 寸 ST7735S 的硬件连续滚动，再决定是否接入分页看板。
 
 ### 构建配置
@@ -42,15 +43,29 @@ Component config -> net_wifi
 
 API 密码只保存在本机 `sdkconfig`，不要提交到仓库。
 
-### 构建记录
+`GET /api/status` 的行情字段示例：
 
-第二阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证：
+```json
+{
+  "market": {
+    "ready": true,
+    "holdings": 16,
+    "quote_ok": 16,
+    "error": "OK",
+    "items": [{"symbol":"NVDA","last":169.68,"percent":1.2}]
+  }
+}
+```
+
+只读接口沿用 Web 控制台现有鉴权策略；当启用 `CONFIG_WEB_CONSOLE_PROTECT_READ` 时需要 Token。
+
+第三阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证：
 
 ```text
 Project build complete.
-esp32s3_gateway.bin binary size 0x22b600
+esp32s3_gateway.bin binary size 0x22b810
 Smallest app partition is 0x300000
-0xd4a00 bytes (28%) free
+0xd47f0 bytes (28%) free
 ```
 
 当前只完成编译，尚未向 ESP32-S3 实机烧录。
