@@ -12,6 +12,7 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "mbedtls/base64.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "sdkconfig.h"
@@ -81,15 +82,27 @@ static esp_err_t http_get(const char *url, const char *user, const char *passwor
         .buffer_size_tx = 512,
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
-    if (user != NULL && user[0] != '\0') {
-        config.username = user;
-        config.password = password != NULL ? password : "";
-        config.auth_type = HTTP_AUTH_TYPE_BASIC;
-    }
-
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == NULL) {
         return ESP_ERR_NO_MEM;
+    }
+    if (user != NULL && user[0] != '\0') {
+        char credentials[160];
+        char encoded[224];
+        size_t encoded_len = 0;
+        int credential_len = snprintf(credentials, sizeof(credentials), "%s:%s",
+                                      user, password != NULL ? password : "");
+        if (credential_len < 0 || (size_t)credential_len >= sizeof(credentials) ||
+            mbedtls_base64_encode((unsigned char *)encoded, sizeof(encoded) - 1,
+                                  &encoded_len, (const unsigned char *)credentials,
+                                  (size_t)credential_len) != 0) {
+            esp_http_client_cleanup(client);
+            return ESP_ERR_INVALID_ARG;
+        }
+        encoded[encoded_len] = '\0';
+        char authorization[240];
+        snprintf(authorization, sizeof(authorization), "Basic %s", encoded);
+        esp_http_client_set_header(client, "Authorization", authorization);
     }
     esp_http_client_set_header(client, "Accept", "application/json");
     esp_err_t err = esp_http_client_perform(client);

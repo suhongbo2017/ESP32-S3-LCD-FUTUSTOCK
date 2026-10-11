@@ -347,14 +347,19 @@ static void status_task(void *arg)
 static void market_data_task(void *arg)
 {
     (void)arg;
+    bool refreshed = false;
     for (;;) {
         net_manager_status_t status = net_manager_get_status();
         if (status.active != NET_BACKEND_NONE) {
-            market_data_refresh();
+            esp_err_t err = market_data_refresh();
+            refreshed = (err == ESP_OK);
         } else {
             ESP_LOGW(TAG, "行情刷新跳过：暂无可用网络");
         }
-        vTaskDelay(pdMS_TO_TICKS(CONFIG_MARKET_DATA_REFRESH_MS));
+
+        /* 首次联网/失败时快速重试；成功后恢复正常行情周期。 */
+        uint32_t wait_ms = refreshed ? CONFIG_MARKET_DATA_REFRESH_MS : 5000;
+        vTaskDelay(pdMS_TO_TICKS(wait_ms));
     }
 }
 

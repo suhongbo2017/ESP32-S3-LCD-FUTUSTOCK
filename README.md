@@ -59,16 +59,21 @@ API 密码只保存在本机 `sdkconfig`，不要提交到仓库。
 
 只读接口沿用 Web 控制台现有鉴权策略；当启用 `CONFIG_WEB_CONSOLE_PROTECT_READ` 时需要 Token。
 
-第三阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证：
+第三阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证，并在 ESP32-S3 `COM7` 实机烧录验证：
 
 ```text
 Project build complete.
-esp32s3_gateway.bin binary size 0x22b810
+esp32s3_gateway.bin binary size 0x22b8d0
 Smallest app partition is 0x300000
-0xd47f0 bytes (28%) free
+0xd4730 bytes (28%) free
+
+WiFi: 192.168.99.36
+持仓同步成功：16 只
+行情成功：16/16 只
+MQTT 已连接，传感器数据正常
 ```
 
-当前只完成编译，尚未向 ESP32-S3 实机烧录。
+实机已确认屏幕初始化不再触发 LVGL 重启，连续 30 秒串口观察无 `Guru Meditation`。
 
 ## 版本管理
 

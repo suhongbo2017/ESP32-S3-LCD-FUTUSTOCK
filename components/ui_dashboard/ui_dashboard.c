@@ -529,8 +529,8 @@ esp_err_t ui_dashboard_init(void)
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle     = io,               /* add_disp 内部会注册传输完成回调，必须提供 */
         .panel_handle  = panel,
-        .buffer_size   = s_ui_w * s_ui_h,
-        .double_buffer = false,
+        .buffer_size   = 1024,      /* 小块 DMA 缓冲，避免整帧连续 DMA 内存分配失败 */
+        .double_buffer = true,
         .hres          = s_ui_w,
         .vres          = s_ui_h,
         /* 【关键】旋转必须与 lcd_st7735 的 Kconfig 旋转保持一致！
@@ -556,7 +556,7 @@ esp_err_t ui_dashboard_init(void)
                                        40KB 内部分配会失败（实测踩过：导致重启循环）*/
             .swap_bytes   = true,
             .sw_rotate    = false,
-            .full_refresh = true,
+            .full_refresh = false,
         },
     };
     lv_display_t *disp = lvgl_port_add_disp(&disp_cfg);
