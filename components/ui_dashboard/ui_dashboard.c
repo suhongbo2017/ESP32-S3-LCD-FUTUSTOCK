@@ -127,9 +127,9 @@ static void ui_update_market(void)
         }
         lv_label_set_text(s_lbl_market[row], buf);
         lv_obj_set_style_text_color(s_lbl_market[row],
-                                    quote->valid && quote->percent >= 0.0f
-                                        ? lv_color_hex(0x69F0AE)
-                                        : lv_color_hex(0xFF8A80),
+                                    !quote->valid ? lv_color_hex(0x90A4AE)
+                                        : quote->percent >= 0.0f ? lv_color_hex(0xFF5252)
+                                                                  : lv_color_hex(0x69F0AE),
                                     LV_PART_MAIN);
     }
 }

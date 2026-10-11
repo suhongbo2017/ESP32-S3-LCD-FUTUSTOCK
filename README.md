@@ -17,6 +17,7 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 - 已新增 `components/market_data`，使用 `esp_http_client + cJSON` 迁移 futu-tracker 持仓同步和腾讯行情请求。
 - `app_main` 已创建行情刷新任务：网络可用时按 Kconfig 周期同步持仓并拉取行情。
 - LVGL 已改为 `FutuStock` 128x160 行情看板：4 行紧凑行情、5 秒分页，底部显示链路和 IP。
+- 行情颜色已按中国市场习惯设置为：上涨红色、下跌绿色、无效数据灰色。
 - Web `/api/status` 已增加 `market` 快照：持仓数量、有效行情数量、错误信息和逐条行情。
 - 行情网络任务与 LVGL 显示任务通过快照复制隔离，网络请求不会在 LVGL 锁内执行。
 
