@@ -42,6 +42,7 @@
    故改用本字体。 */
 LV_FONT_DECLARE(lv_font_cjk_14);
 #include "net_manager.h"
+#include "market_data.h"
 #include "ha_mqtt.h"
 #include "board_pins.h"
 
@@ -52,6 +53,8 @@ static const char *TAG = "ui_dashboard";
 #define UI_REFRESH_MS   1000              /*!< 运行时长/状态周期刷新 */
 #define UI_TASK_STACK   4096
 #define UI_TASK_PRIO    6
+#define MARKET_ROWS     4
+#define MARKET_PAGE_MS  5000
 
 static TaskHandle_t s_task = NULL;                                      /*!< 刷新任务 */
 static uint32_t s_ui_w = UI_W;      /*!< 旋转后的显示宽（默认 128） */
@@ -78,9 +81,58 @@ static lv_display_t *s_disp = NULL;     /*!< LVGL 显示设备（供截图使用
 
 static uint64_t s_boot_us = 0;          /*!< 启动时刻（esp_timer 单调时钟） */
 
+static lv_obj_t *s_lbl_market_page = NULL;
+static lv_obj_t *s_lbl_market[MARKET_ROWS] = { 0 };
+static market_holding_t s_market_holdings[CONFIG_MARKET_DATA_MAX_HOLDINGS];
+static market_quote_t s_market_quotes[CONFIG_MARKET_DATA_MAX_HOLDINGS];
+static size_t s_market_count = 0;
+static size_t s_market_page = 0;
+static uint64_t s_market_page_at_us = 0;
+
 /* ---------------------------------------------------------------------------
  * UI 刷新（必须在持 lvgl_port_lock 的情况下调用）
  * ------------------------------------------------------------------------- */
+
+/* 行情页：网络任务更新快照，LVGL 任务只负责复制和绘制。 */
+static void ui_update_market(void)
+{
+    if (market_data_copy_snapshot(s_market_holdings, s_market_quotes,
+                                  CONFIG_MARKET_DATA_MAX_HOLDINGS, &s_market_count) != ESP_OK) {
+        return;
+    }
+    size_t pages = (s_market_count + MARKET_ROWS - 1) / MARKET_ROWS;
+    if (pages == 0) pages = 1;
+    int64_t now = esp_timer_get_time();
+    if (now - (int64_t)s_market_page_at_us >= (int64_t)MARKET_PAGE_MS * 1000) {
+        s_market_page = (s_market_page + 1) % pages;
+        s_market_page_at_us = (uint64_t)now;
+    }
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Futu %u/%u", (unsigned)(s_market_page + 1), (unsigned)pages);
+    lv_label_set_text(s_lbl_market_page, buf);
+    for (size_t row = 0; row < MARKET_ROWS; row++) {
+        size_t index = s_market_page * MARKET_ROWS + row;
+        if (index >= s_market_count) {
+            lv_label_set_text(s_lbl_market[row], "-");
+            continue;
+        }
+        const market_holding_t *holding = &s_market_holdings[index];
+        const market_quote_t *quote = &s_market_quotes[index];
+        if (quote->valid) {
+            snprintf(buf, sizeof(buf), "%-6s %7.2f %+.2f%%",
+                     holding->symbol, quote->last, quote->percent);
+        } else {
+            snprintf(buf, sizeof(buf), "%-6s       --", holding->symbol);
+        }
+        lv_label_set_text(s_lbl_market[row], buf);
+        lv_obj_set_style_text_color(s_lbl_market[row],
+                                    quote->valid && quote->percent >= 0.0f
+                                        ? lv_color_hex(0x69F0AE)
+                                        : lv_color_hex(0xFF8A80),
+                                    LV_PART_MAIN);
+    }
+}
 
 /** 上行链路值与颜色 */
 static void ui_set_uplink(const net_manager_status_t *st)
@@ -114,6 +166,7 @@ static void ui_refresh(const net_manager_status_t *st, bool uptime_only)
         net_manager_status_t st_local = *st;   /* 拷贝快照，避免持有外部对象 */
 
         ui_set_uplink(&st_local);
+        ui_update_market();
 
         snprintf(buf, sizeof(buf), "IP    %s",
                  st_local.active_ip[0] ? st_local.active_ip : "-");
@@ -171,6 +224,9 @@ static void ui_show_notify(const ha_notify_t *n)
     lv_obj_add_flag(s_lbl_eth,    LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_lbl_wifi,   LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_lbl_sensor, LV_OBJ_FLAG_HIDDEN);
+    for (size_t i = 0; i < MARKET_ROWS; i++) {
+        lv_obj_add_flag(s_lbl_market[i], LV_OBJ_FLAG_HIDDEN);
+    }
     lv_obj_remove_flag(s_notify_panel, LV_OBJ_FLAG_HIDDEN);
 
     s_notify_active   = true;
@@ -185,9 +241,9 @@ static void ui_hide_notify(void)
     lv_obj_add_flag(s_notify_panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(s_lbl_uplink, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(s_lbl_ip,     LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(s_lbl_eth,    LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(s_lbl_wifi,   LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(s_lbl_sensor, LV_OBJ_FLAG_HIDDEN);
+    for (size_t i = 0; i < MARKET_ROWS; i++) {
+        lv_obj_remove_flag(s_lbl_market[i], LV_OBJ_FLAG_HIDDEN);
+    }
     s_notify_active = false;
 }
 
@@ -297,20 +353,32 @@ static void ui_create_widgets(void)
     lv_obj_t *title = lv_label_create(scr);
     lv_obj_set_style_text_color(title, lv_color_hex(0x00E5FF), LV_PART_MAIN);
     lv_obj_set_style_text_font(title, &lv_font_cjk_14, LV_PART_MAIN);
-    lv_label_set_text(title, "双网网关");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 2);
+    lv_label_set_text(title, "FutuStock");
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 6, 2);
 
-    /* 正文排版参数：全部用 12px，行高间距 18px，内容区宽 116 */
+    s_lbl_market_page = lv_label_create(scr);
+    lv_obj_set_style_text_font(s_lbl_market_page, &lv_font_montserrat_12, LV_PART_MAIN);
+    lv_obj_set_style_text_color(s_lbl_market_page, lv_color_hex(0xB0BEC5), LV_PART_MAIN);
+    lv_obj_align(s_lbl_market_page, LV_ALIGN_TOP_RIGHT, -6, 4);
+
+    for (size_t i = 0; i < MARKET_ROWS; i++) {
+        s_lbl_market[i] = lv_label_create(scr);
+        lv_obj_set_style_text_font(s_lbl_market[i], &lv_font_montserrat_12, LV_PART_MAIN);
+        lv_obj_set_width(s_lbl_market[i], UI_W - 12);
+        lv_label_set_long_mode(s_lbl_market[i], LV_LABEL_LONG_CLIP);
+        lv_obj_set_pos(s_lbl_market[i], 6, 22 + (int)i * 18);
+        lv_label_set_text(s_lbl_market[i], "-");
+    }
+
+    /* 底部三行仅保留链路、IP、运行时长；Eth/WiFi/传感器控件仍保留供通知逻辑兼容。 */
     const int X  = 6;              /* 左右边距 */
     const int W  = UI_W - 2 * X;   /* 内容可用宽度（116） */
-    const int Y1 = 26;             /* 第一行 y */
-    const int DY = 18;             /* 行距 */
 
     s_lbl_uplink = lv_label_create(scr);
     lv_obj_set_style_text_font(s_lbl_uplink, &lv_font_montserrat_12, LV_PART_MAIN);
     lv_obj_set_width(s_lbl_uplink, W);
     lv_label_set_long_mode(s_lbl_uplink, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(s_lbl_uplink, X, Y1);
+    lv_obj_set_pos(s_lbl_uplink, X, 108);
     lv_label_set_text(s_lbl_uplink, "Uplink: -");
 
     s_lbl_ip = lv_label_create(scr);
@@ -318,21 +386,23 @@ static void ui_create_widgets(void)
     lv_obj_set_style_text_color(s_lbl_ip, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_width(s_lbl_ip, W);
     lv_label_set_long_mode(s_lbl_ip, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(s_lbl_ip, X, Y1 + DY);
+    lv_obj_set_pos(s_lbl_ip, X, 124);
     lv_label_set_text(s_lbl_ip, "IP    -");
 
     s_lbl_eth = lv_label_create(scr);
     lv_obj_set_style_text_font(s_lbl_eth, &lv_font_montserrat_12, LV_PART_MAIN);
     lv_obj_set_width(s_lbl_eth, W);
     lv_label_set_long_mode(s_lbl_eth, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(s_lbl_eth, X, Y1 + 2 * DY);
+    lv_obj_add_flag(s_lbl_eth, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_pos(s_lbl_eth, X, 108);
     lv_label_set_text(s_lbl_eth, "Eth   OFF");
 
     s_lbl_wifi = lv_label_create(scr);
     lv_obj_set_style_text_font(s_lbl_wifi, &lv_font_montserrat_12, LV_PART_MAIN);
     lv_obj_set_width(s_lbl_wifi, W);
     lv_label_set_long_mode(s_lbl_wifi, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(s_lbl_wifi, X, Y1 + 3 * DY);
+    lv_obj_add_flag(s_lbl_wifi, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_pos(s_lbl_wifi, X, 108);
     lv_label_set_text(s_lbl_wifi, "WiFi  --");
 
     /* 传感器温湿度行（自建 CJK 字体；超时未更新则显示 --） */
@@ -341,7 +411,8 @@ static void ui_create_widgets(void)
     lv_obj_set_style_text_color(s_lbl_sensor, lv_color_hex(0x69F0AE), LV_PART_MAIN);
     lv_obj_set_width(s_lbl_sensor, W);
     lv_label_set_long_mode(s_lbl_sensor, LV_LABEL_LONG_WRAP);   /* 极端情况下换行，绝不横向溢出 */
-    lv_obj_set_pos(s_lbl_sensor, X, Y1 + 4 * DY);
+    lv_obj_add_flag(s_lbl_sensor, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_pos(s_lbl_sensor, X, 108);
     lv_label_set_text(s_lbl_sensor, "温--℃ 湿--%");
 
     /* 底部运行时长（浅灰） */

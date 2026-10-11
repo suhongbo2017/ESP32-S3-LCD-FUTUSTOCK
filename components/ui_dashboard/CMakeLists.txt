@@ -5,6 +5,6 @@
 idf_component_register(
     SRCS "ui_dashboard.c" "fonts/lv_font_cjk_14.c"
     INCLUDE_DIRS "include" "fonts"
-    REQUIRES lvgl esp_lvgl_port lcd_st7735 net_manager ha_mqtt board
+    REQUIRES lvgl esp_lvgl_port lcd_st7735 net_manager market_data ha_mqtt board
              log esp_timer freertos esp_common
 )

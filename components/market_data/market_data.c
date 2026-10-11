@@ -12,6 +12,8 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "sdkconfig.h"
 
 static const char *TAG = "market_data";
@@ -27,6 +29,7 @@ static uint16_t s_quote_ok_count = 0;
 static uint32_t s_last_success_ms = 0;
 static char s_last_error[128] = "尚未同步";
 static char s_quote_path[QUOTE_PATH_MAX];
+static SemaphoreHandle_t s_lock;
 
 /* esp_http_client event callback: only the response body is retained. */
 typedef struct {
@@ -319,10 +322,14 @@ static esp_err_t fetch_quotes(void)
 
 esp_err_t market_data_init(void)
 {
+    s_lock = xSemaphoreCreateMutex();
+    if (s_lock == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
     s_holding_count = 0;
     s_quote_ok_count = 0;
     s_last_success_ms = 0;
-    s_last_error[0] = '\0';
+    snprintf(s_last_error, sizeof(s_last_error), "尚未同步");
     return ESP_OK;
 }
 
@@ -332,6 +339,10 @@ esp_err_t market_data_refresh(void)
     set_error("market_data 未启用");
     return ESP_ERR_NOT_SUPPORTED;
 #else
+    if (s_lock == NULL || xSemaphoreTake(s_lock, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        set_error("行情快照忙");
+        return ESP_ERR_TIMEOUT;
+    }
     int64_t started = esp_timer_get_time();
     esp_err_t err = sync_holdings();
     if (err == ESP_OK) err = fetch_quotes();
@@ -341,8 +352,28 @@ esp_err_t market_data_refresh(void)
     }
     ESP_LOGI(TAG, "刷新完成：%s，耗时 %lldms", err == ESP_OK ? "成功" : s_last_error,
              (long long)((esp_timer_get_time() - started) / 1000));
+    xSemaphoreGive(s_lock);
     return err;
 #endif
+}
+
+esp_err_t market_data_copy_snapshot(market_holding_t *holdings,
+                                    market_quote_t *quotes,
+                                    size_t capacity,
+                                    size_t *count)
+{
+    if (holdings == NULL || quotes == NULL || count == NULL || s_lock == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (xSemaphoreTake(s_lock, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    size_t n = s_holding_count < capacity ? s_holding_count : capacity;
+    memcpy(holdings, s_holdings, n * sizeof(holdings[0]));
+    memcpy(quotes, s_quotes, n * sizeof(quotes[0]));
+    *count = n;
+    xSemaphoreGive(s_lock);
+    return ESP_OK;
 }
 
 size_t market_data_holding_count(void) { return s_holding_count; }

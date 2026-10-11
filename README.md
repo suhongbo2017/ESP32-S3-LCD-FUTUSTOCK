@@ -11,32 +11,23 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 
 ## 当前状态
 
-第一阶段骨架已完成：
+第二阶段已完成：
 
 - 已复制并独立维护 ESP32-S3 Gateway 的 ESP-IDF、ST7735S、LVGL、WiFi、双网和双分区 OTA 基础工程。
 - 已新增 `components/market_data`，使用 `esp_http_client + cJSON` 迁移 futu-tracker 持仓同步和腾讯行情请求。
-- `app_main` 已创建行情刷新任务：网络可用时按 Kconfig 周期同步持仓并拉取行情，结果输出到串口。
-- 当前尚未把行情数据接入 LVGL；屏幕仍显示原 Gateway 的网络看板。
+- `app_main` 已创建行情刷新任务：网络可用时按 Kconfig 周期同步持仓并拉取行情。
+- LVGL 已改为 `FutuStock` 128x160 行情看板：4 行紧凑行情、5 秒分页，底部显示链路和 IP。
+- 行情网络任务与 LVGL 显示任务通过快照复制隔离，网络请求不会在 LVGL 锁内执行。
 
 下一阶段：
 
-1. 在 Web `/api/status` 返回持仓和行情快照。
-2. 将行情数据显示到 128x160 ST7735S 的 LVGL 看板。
-3. 增加 1.77 寸屏幕分页和连续滚动实验。
-4. 在目标 S3 硬件上完成编译、烧录和长稳验证。
+1. 在 Web `/api/status` 返回持仓和行情快照，并增加控制端刷新/同步操作。
+2. 在目标 S3 硬件上完成编译、烧录和屏幕显示验证。
+3. 单独验证 1.77 寸 ST7735S 的硬件连续滚动，再决定是否接入分页看板。
 
-### 构建记录
+### 构建配置
 
-第一阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证：
-
-```text
-Project build complete.
-esp32s3_gateway.bin binary size 0x22b220
-Smallest app partition is 0x300000
-0xd4de0 bytes (28%) free
-```
-
-当前只完成编译，尚未向 ESP32-S3 实机烧录。
+首次使用前，在 `sdkconfig` 或 `menuconfig` 中配置：
 
 ```text
 Component config -> market_data
@@ -50,6 +41,19 @@ Component config -> net_wifi
 ```
 
 API 密码只保存在本机 `sdkconfig`，不要提交到仓库。
+
+### 构建记录
+
+第二阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证：
+
+```text
+Project build complete.
+esp32s3_gateway.bin binary size 0x22b600
+Smallest app partition is 0x300000
+0xd4a00 bytes (28%) free
+```
+
+当前只完成编译，尚未向 ESP32-S3 实机烧录。
 
 ## 版本管理
 
