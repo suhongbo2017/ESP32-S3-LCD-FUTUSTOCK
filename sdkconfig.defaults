@@ -1,0 +1,63 @@
+# ============================================================================
+# ESP32-S3 双网冗余 IoT 网关（方案 A）—— 默认配置
+# 修改方式：idf.py menuconfig 修改后保存（写入 sdkconfig），或直接编辑本文件。
+# 本文件会被纳入版本管理，作为工程默认值。
+# ============================================================================
+
+# ---- 目标芯片 ----
+CONFIG_IDF_TARGET="esp32s3"
+
+# ---- 分区表：默认 1MB app 放不下 LVGL，改用自定义表（app 3MB，见 partitions.csv） ----
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---- 烧录 / Flash：本板实测 16MB ----
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+
+# ---- 以太网：W5500 驱动已内置于 esp_eth 组件（IDF >= 5.1） ----
+CONFIG_ETH_USE_SPI_ETHERNET=y
+CONFIG_ETH_SPI_ETHERNET_W5500=y
+
+# ---- LWIP：设备主机名（路由器里好认，DHCP 通告） ----
+CONFIG_LWIP_LOCAL_HOSTNAME="esp32s3-gateway"
+
+# ---- LVGL 看板：16bit RGB565 + 内置 Montserrat 字体 ----
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_FONT_MONTSERRAT_12=y   # 正文 12px（布局不溢出）
+CONFIG_LV_FONT_MONTSERRAT_14=y   # 标题字体
+CONFIG_LV_FONT_MONTSERRAT_16=y
+
+# ---- 本工程组件参数 ----
+# 以下均可通过 menuconfig -> Component config -> net_wifi / net_eth 修改。
+# WiFi 连接信息（务必改为你自己的热点）：
+# CONFIG_NET_WIFI_SSID="MyWiFi"
+# CONFIG_NET_WIFI_PASSWORD="MyPassword"
+# CONFIG_NET_WIFI_MAX_RETRY=5
+
+# 以太网默认 DHCP；如需静态 IP：
+# CONFIG_NET_ETH_USE_STATIC_IP=y
+# CONFIG_NET_ETH_STATIC_IP="192.168.1.100"
+# CONFIG_NET_ETH_NETMASK="255.255.255.0"
+# CONFIG_NET_ETH_GATEWAY="192.168.1.1"
+# CONFIG_NET_ETH_DNS="8.8.8.8"
+# CONFIG_NET_ETH_SPI_CLK_HZ=10000000
+
+# WiFi 可选静态 IP（默认 DHCP，保持注释即可）：
+# CONFIG_NET_WIFI_USE_STATIC_IP=y
+# CONFIG_NET_WIFI_STATIC_IP="192.168.1.101"
+# CONFIG_NET_WIFI_NETMASK="255.255.255.0"
+# CONFIG_NET_WIFI_GATEWAY="192.168.1.1"
+# CONFIG_NET_WIFI_DNS="223.5.5.5"
+
+# 上云 Broker 已确认：broker.emqx.io:1883（匿名；详见 PINMAP.md §7）
+
+# ---- PSRAM：外置 ESP-PSRAM64H（8MB，Quad 四线）【已决策】 ----
+# 挂 SPI0_CS1、走 GPIO26~32，不占用 GPIO33~38，与 TF 卡(SDMMC)无冲突。
+# 注意：S3R8 / S3R8V 模块内置 PSRAM 为八线(OCT)方案，与本板外置 Quad 方案
+#       的 Kconfig 选择不同，勿把模块板的 OCT 配置误用到本板。
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y          # 本板外置 PSRAM 为四线 QUAD
+CONFIG_SPIRAM_TYPE_AUTO=y          # 自动识别芯片；若识别失败可改 CONFIG_SPIRAM_TYPE_ESP_PSRAM64H
+CONFIG_SPIRAM_USE_MALLOC=y         # PSRAM 并入 malloc；大缓冲用 heap_caps_malloc(.., MALLOC_CAP_SPIRAM)
+CONFIG_SPIRAM_SPEED_80M=y          # 若出现不稳定，改 CONFIG_SPIRAM_SPEED_40M

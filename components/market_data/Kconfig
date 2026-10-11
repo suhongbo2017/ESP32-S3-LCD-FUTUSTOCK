@@ -1,0 +1,35 @@
+# market_data 组件配置
+menu "market_data（futu 持仓与腾讯行情）"
+
+config MARKET_DATA_ENABLED
+    bool "启用 futu 持仓与行情同步"
+    default y
+
+config MARKET_DATA_API_URL
+    string "futu-tracker 持仓 API URL"
+    default "https://futu.19831018.xyz/api/positions"
+    depends on MARKET_DATA_ENABLED
+
+config MARKET_DATA_API_USER
+    string "futu-tracker API 用户名"
+    default "admin"
+    depends on MARKET_DATA_ENABLED
+
+config MARKET_DATA_API_PASSWORD
+    string "futu-tracker API 密码"
+    default ""
+    depends on MARKET_DATA_ENABLED
+
+config MARKET_DATA_REFRESH_MS
+    int "行情刷新周期（毫秒）"
+    default 300000
+    range 30000 3600000
+    depends on MARKET_DATA_ENABLED
+
+config MARKET_DATA_MAX_HOLDINGS
+    int "最大持仓数量"
+    default 40
+    range 1 64
+    depends on MARKET_DATA_ENABLED
+
+endmenu

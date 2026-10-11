@@ -1,0 +1,7 @@
+## main 组件依赖（ESP Component Manager 自动从组件仓库下载）
+dependencies:
+  idf: ">=5.0"
+  ## LVGL v9 图形库（本地看板）
+  lvgl/lvgl: "^9.3"
+  ## Espressif 官方 LVGL 端口（将 esp_lcd 面板适配为 LVGL 显示设备）
+  espressif/esp_lvgl_port: "^2.3"

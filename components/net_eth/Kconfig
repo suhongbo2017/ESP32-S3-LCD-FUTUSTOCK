@@ -1,0 +1,38 @@
+# net_eth 组件配置（menuconfig: Component config -> net_eth）
+menu "net_eth（W5500 有线以太网）"
+
+config NET_ETH_USE_STATIC_IP
+    bool "使用静态 IP（默认 DHCP）"
+    default n
+    help
+        置空时使用 DHCP 自动获取；勾选后使用下方四行静态配置。
+        注意：静态 IP 需与局域网网段一致，否则无线兜底链路可能被误判优先。
+
+config NET_ETH_STATIC_IP
+    string "静态 IP 地址"
+    default "192.168.1.100"
+    depends on NET_ETH_USE_STATIC_IP
+
+config NET_ETH_NETMASK
+    string "子网掩码"
+    default "255.255.255.0"
+    depends on NET_ETH_USE_STATIC_IP
+
+config NET_ETH_GATEWAY
+    string "网关"
+    default "192.168.1.1"
+    depends on NET_ETH_USE_STATIC_IP
+
+config NET_ETH_DNS
+    string "DNS 服务器（静态 IP 时使用）"
+    default "8.8.8.8"
+    depends on NET_ETH_USE_STATIC_IP
+
+config NET_ETH_SPI_CLK_HZ
+    int "W5500 SPI 时钟频率 (Hz)"
+    default 10000000
+    range 1000000 33000000
+    help
+        W5500 最高支持约 33MHz。10MHz 最稳妥；短连接线/独占总线时可提高。
+
+endmenu

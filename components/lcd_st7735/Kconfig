@@ -1,0 +1,92 @@
+# lcd_st7735 组件配置（menuconfig: Component config -> lcd_st7735）
+menu "lcd_st7735（ST7735S 1.77' TFT 看板）"
+
+config LCD_ST7735_SPI_CLK_HZ
+    int "SPI 时钟频率 (Hz)"
+    default 40000000
+    range 1000000 60000000
+    help
+        ST7735S 最高支持约 60MHz；40MHz 较稳妥。
+
+config LCD_ST7735_H_RES
+    int "面板水平分辨率（0°时）"
+    default 128
+    help
+        应与 board_pins.h 的 BOARD_LCD_H_RES 一致；旋转 90/270 时宽高自动互换。
+
+config LCD_ST7735_V_RES
+    int "面板垂直分辨率（0°时）"
+    default 160
+
+choice LCD_ST7735_ROTATION
+    prompt "屏幕旋转（MADCTL 方向，用于修正面板物理朝向）"
+    default LCD_ST7735_ROTATION_0
+    help
+        旋转后 OFFSET 按查表自动适应（90/270 交换列行偏移）；
+        如需完全手工控制偏移，请打开 LCD_ST7735_OFFSET_MANUAL。
+
+config LCD_ST7735_ROTATION_0
+    bool "0°（竖屏 128x160）"
+
+config LCD_ST7735_ROTATION_90
+    bool "90°（横屏 160x128）"
+
+config LCD_ST7735_ROTATION_180
+    bool "180°（竖屏 128x160，上下倒置）"
+
+config LCD_ST7735_ROTATION_270
+    bool "270°（横屏 160x128）"
+
+endchoice
+
+config LCD_ST7735_MIRROR_X
+    bool "镜像 X（水平翻转）"
+    default n
+    help
+        画面左右颠倒时打开（叠加在旋转之上，用 MADCTL MX 位实现）。
+
+config LCD_ST7735_MIRROR_Y
+    bool "镜像 Y（垂直翻转）"
+    default n
+    help
+        画面上下颠倒时打开（叠加在旋转之上，用 MADCTL MY 位实现）。
+
+config LCD_ST7735_OFFSET_X
+    int "基准列偏移 OFFSET_X（0°时 CASET 起始；显存132 - 面板128）"
+    default 0
+    range 0 10
+    help
+        【本板实测】必须为 0。设为 2 会使 CASET 窗口超出面板实际行宽，导致每行回卷、画面斜切。
+
+config LCD_ST7735_OFFSET_Y
+    int "基准行偏移 OFFSET_Y（0°时 RASET 起始；显存162 - 面板160）"
+    default 0
+    range 0 10
+
+config LCD_ST7735_OFFSET_MANUAL
+    bool "手工偏移（关闭自动旋转偏移查表）"
+    default n
+    help
+        开启后所有旋转都直接使用 OFFSET_X/OFFSET_Y，不再自动交换
+        （仅调试用，正常工作建议关闭）。
+
+config LCD_ST7735_RGB_BGR
+    bool "颜色顺序 BGR（关闭=RGB）"
+    default y
+    help
+        多数 ST7735 模块为 BGR 接线。若红/蓝互换请切换此项。
+
+config LCD_ST7735_INVERT_COLOR
+    bool "颜色反转（画面负片时打开）"
+    default n
+
+config LCD_ST7735_TEST_PATTERN
+    bool "测试图诊断模式（绕过 LVGL，固定绘制诊断图）"
+    default n
+    help
+        开启后不再启动 LVGL 看板，直接用 esp_lcd 面板 API 绘制静态测试图：
+        1px 白色边框 + 四角 16x16 色块（红/绿/蓝/黄）+ 全屏红/绿/蓝三条竖色带。
+        用于单独校准 ROTATION / OFFSET、观察是否偏移 / 裁切 / 斜切。
+        关闭后恢复 LVGL 看板。
+
+endmenu

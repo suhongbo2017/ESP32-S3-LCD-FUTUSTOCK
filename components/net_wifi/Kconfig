@@ -1,0 +1,51 @@
+# net_wifi 组件配置（menuconfig: Component config -> net_wifi）
+menu "net_wifi（WiFi Station 备用链路）"
+
+config NET_WIFI_SSID
+    string "WiFi SSID"
+    default "MyWiFi"
+    help
+        要连接的 2.4G 热点名称（必填，改为你自己的）。
+
+config NET_WIFI_PASSWORD
+    string "WiFi 密码"
+    default ""
+    help
+        留空表示开放网络（WIFI_AUTH_OPEN）。
+
+config NET_WIFI_MAX_RETRY
+    int "断线最大重连次数"
+    default 5
+    range 0 100
+    help
+        连续重连失败达到该次数后停止自动重连，避免无限空转；
+        可由上层（net_manager/LCD 业务）按需触发恢复。
+
+config NET_WIFI_USE_STATIC_IP
+    bool "使用静态 IP（默认 DHCP）"
+    default n
+    help
+        置空时 WiFi 由 DHCP 自动获取 IP；勾选后使用下方四行静态配置
+        （适合路由器无 DHCP 或需固定地址的场景）。
+
+config NET_WIFI_STATIC_IP
+    string "静态 IP 地址"
+    default "192.168.1.101"
+    depends on NET_WIFI_USE_STATIC_IP
+
+config NET_WIFI_NETMASK
+    string "子网掩码"
+    default "255.255.255.0"
+    depends on NET_WIFI_USE_STATIC_IP
+
+config NET_WIFI_GATEWAY
+    string "网关"
+    default "192.168.1.1"
+    depends on NET_WIFI_USE_STATIC_IP
+
+config NET_WIFI_DNS
+    string "DNS 服务器（静态 IP 时使用）"
+    default "223.5.5.5"
+    depends on NET_WIFI_USE_STATIC_IP
+
+endmenu

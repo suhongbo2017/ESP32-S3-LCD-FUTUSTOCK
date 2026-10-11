@@ -1,0 +1,4 @@
+## web_console 组件依赖（ESP Component Manager 自动下载）
+dependencies:
+  ## mDNS：IDF v5.x 已移出内核，需从组件仓库获取（http://<hostname>.local 访问）
+  espressif/mdns: "^1.2"

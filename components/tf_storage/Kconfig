@@ -1,0 +1,31 @@
+# tf_storage 组件配置（menuconfig: Component config -> tf_storage）
+menu "tf_storage（TF 卡历史记录）"
+
+config TF_STORAGE_ENABLE
+    bool "启用 TF 卡记录"
+    default y
+    help
+        挂载 microSD 并在其上按天记录传感器/网络/通知等历史数据。
+        未插卡时自动降级（仅打印告警，不影响其它功能）。
+
+config TF_STORAGE_MOUNT_POINT
+    string "挂载点"
+    default "/sdcard"
+
+config TF_STORAGE_LOG_DIR
+    string "日志子目录（相对挂载点，留空=根目录）"
+    default "logs"
+
+config TF_STORAGE_QUEUE_LEN
+    int "写入队列长度"
+    default 32
+
+config TF_STORAGE_FORMAT_IF_MOUNT_FAILED
+    bool "挂载失败时自动格式化 TF 卡"
+    default n
+    help
+        ⚠️ 危险：开启后，当卡能被识别但文件系统无效时，会自动把卡格式化为 FAT 并
+        清空卡上原有数据（仅用于空卡/新卡）。
+        注意：如果卡根本没被识别（sdmmc_card_init 超时），本选项无效。
+
+endmenu

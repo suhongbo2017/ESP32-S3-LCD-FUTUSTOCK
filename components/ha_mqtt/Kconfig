@@ -1,0 +1,88 @@
+# ha_mqtt 组件配置（menuconfig: Component config -> ha_mqtt）
+menu "ha_mqtt（Home Assistant MQTT 接入）"
+
+config HA_MQTT_BROKER_HOST
+    string "MQTT Broker 主机（IP/域名）"
+    default "192.168.99.253"
+    help
+        本工程已实测确认：本地 Home Assistant 所在 PC 的 MQTT broker，匿名可用。
+
+config HA_MQTT_PORT
+    int "MQTT Broker 端口"
+    default 1883
+
+config HA_MQTT_USER
+    string "MQTT 用户名（匿名留空）"
+    default ""
+
+config HA_MQTT_PASSWORD
+    string "MQTT 密码（匿名留空）"
+    default ""
+
+config HA_MQTT_CLIENT_ID
+    string "MQTT Client ID（留空=自动生成）"
+    default ""
+
+config HA_MQTT_TOPIC_NOTIFY
+    string "通知订阅主题（HA 推送）"
+    default "ha/esp32gw/notify"
+    help
+        JSON: {"title":"...","message":"...","level":"info|warn|error"}
+
+config HA_MQTT_TOPIC_STATE
+    string "状态发布主题（板子 -> HA）"
+    default "ha/esp32gw/state"
+
+config HA_MQTT_TOPIC_ALERT
+    string "告警发布主题（板子 -> HA，供自动化触发）"
+    default "ha/esp32gw/alert"
+    help
+        板子检测到异常（如传感器掉线/恢复）时向此主题发 JSON：
+        {"type":"sensor_offline","message":"...","uptime":123}
+        可在 HA 里用 MQTT 触发器自动化转发到手机。
+
+config HA_MQTT_SENSOR_ALERT_MS
+    int "传感器掉线告警阈值 (ms)"
+    default 120000
+    help
+        超过该时长未收到传感器数据 → 发告警（同时看板弹通知）。
+        传感器上报周期约 15s，默认留 2 分钟容错。
+
+config HA_MQTT_TOPIC_SENSOR
+    string "传感器数据订阅主题"
+    default "esp32-sensor/data"
+    help
+        现场 ESP32 传感器节点周期发布的温湿度数据（JSON）：
+        {"temp":24.9,"hum":45.2,"rssi":-38,"uptime":14734}
+
+config HA_MQTT_DEVICE_NAME
+    string "HA 中显示的设备名称"
+    default "Sensor-SU-1"
+    help
+        MQTT Discovery 发布的 device.name，即 Home Assistant 里该设备显示的名字。
+
+config HA_MQTT_SENSOR_STALE_MS
+    int "传感器离线判定超时 (ms)"
+    default 60000
+    help
+        超过该时长未收到传感器数据，看板显示为离线（--）。
+        传感器上报周期约 15s，60s 给足重传余量。
+
+config HA_MQTT_HEARTBEAT_MS
+    int "状态心跳周期 (ms)"
+    default 5000
+
+config HA_MQTT_DISCOVERY_ENABLE
+    bool "启用 MQTT Discovery（HA 自动发现实体）"
+    default y
+    help
+        连接成功后向 homeassistant/... 发布 discovery 配置，
+        生成 uplink / ip / uptime / notify 四个传感器实体。
+
+config HA_MQTT_NOTIFY_SHOW_MS
+    int "看板通知显示时长 (ms)"
+    default 10000
+    help
+        收到 HA 通知后在 LCD 看板显示时长，超时自动恢复常规状态显示。
+
+endmenu

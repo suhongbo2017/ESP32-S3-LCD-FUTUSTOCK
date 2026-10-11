@@ -11,12 +11,36 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 
 ## 当前状态
 
-仓库已建立，后续按以下阶段实现：
+第一阶段骨架已完成：
 
-1. 迁移动态持仓和行情数据组件。
-2. 适配 128x160 ST7735S 看板布局。
-3. 接入现有 Web 控制台和双分区 OTA。
-4. 单独验证 ST7735S 硬件连续滚动。
+- 已复制并独立维护 ESP32-S3 Gateway 的 ESP-IDF、ST7735S、LVGL、WiFi、双网和双分区 OTA 基础工程。
+- 已新增 `components/market_data`，使用 `esp_http_client + cJSON` 迁移 futu-tracker 持仓同步和腾讯行情请求。
+- `app_main` 已创建行情刷新任务：网络可用时按 Kconfig 周期同步持仓并拉取行情，结果输出到串口。
+- 当前尚未把行情数据接入 LVGL；屏幕仍显示原 Gateway 的网络看板。
+
+下一阶段：
+
+1. 在 Web `/api/status` 返回持仓和行情快照。
+2. 将行情数据显示到 128x160 ST7735S 的 LVGL 看板。
+3. 增加 1.77 寸屏幕分页和连续滚动实验。
+4. 在目标 S3 硬件上完成编译、烧录和长稳验证。
+
+### 构建配置
+
+首次使用前，在 `sdkconfig` 或 `menuconfig` 中配置：
+
+```text
+Component config -> market_data
+  MARKET_DATA_API_URL
+  MARKET_DATA_API_USER
+  MARKET_DATA_API_PASSWORD
+
+Component config -> net_wifi
+  NET_WIFI_SSID
+  NET_WIFI_PASSWORD
+```
+
+API 密码只保存在本机 `sdkconfig`，不要提交到仓库。
 
 ## 版本管理
 

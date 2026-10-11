@@ -1,0 +1,32 @@
+# web_console 组件配置（menuconfig: Component config -> web_console）
+menu "web_console（Web 控制台）"
+
+config WEB_CONSOLE_PORT
+    int "HTTP 端口"
+    default 80
+
+config WEB_CONSOLE_MDNS_ENABLE
+    bool "启用 mDNS（可用 http://<主机名>.local 访问）"
+    default y
+    help
+        依赖客户端与路由器支持多播；Windows10/11、macOS、iOS、Linux(Avahi) 一般可用。
+        不支持时仍可用 IP 访问。
+
+config WEB_CONSOLE_MDNS_HOSTNAME
+    string "mDNS 主机名"
+    default ""
+    help
+        访问地址：http://<主机名>.local/
+
+config WEB_CONSOLE_TOKEN
+    string "控制操作口令 Token（留空=不校验，不安全）"
+    default ""
+    help
+        仅对“控制类”接口（如 GPIO 设置）校验。可通过 URL 参数 ?token=xxx
+        或请求头 X-Auth-Token 传入。
+
+config WEB_CONSOLE_PROTECT_READ
+    bool "只读接口（状态/日志/截图）也要求 Token"
+    default n
+
+endmenu
