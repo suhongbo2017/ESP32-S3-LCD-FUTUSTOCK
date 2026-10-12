@@ -15,6 +15,7 @@
 #include "mbedtls/base64.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 
 static const char *TAG = "market_data";
@@ -31,6 +32,8 @@ static uint32_t s_last_success_ms = 0;
 static char s_last_error[128] = "尚未同步";
 static char s_quote_path[QUOTE_PATH_MAX];
 static SemaphoreHandle_t s_lock;
+static TaskHandle_t s_refresh_task;
+static volatile bool s_refreshing;
 
 /* esp_http_client event callback: only the response body is retained. */
 typedef struct {
@@ -356,6 +359,7 @@ esp_err_t market_data_refresh(void)
         set_error("行情快照忙");
         return ESP_ERR_TIMEOUT;
     }
+    s_refreshing = true;
     int64_t started = esp_timer_get_time();
     esp_err_t err = sync_holdings();
     if (err == ESP_OK) err = fetch_quotes();
@@ -365,9 +369,29 @@ esp_err_t market_data_refresh(void)
     }
     ESP_LOGI(TAG, "刷新完成：%s，耗时 %lldms", err == ESP_OK ? "成功" : s_last_error,
              (long long)((esp_timer_get_time() - started) / 1000));
+    s_refreshing = false;
     xSemaphoreGive(s_lock);
     return err;
 #endif
+}
+
+void market_data_register_refresh_task(void)
+{
+    s_refresh_task = xTaskGetCurrentTaskHandle();
+}
+
+esp_err_t market_data_request_refresh(void)
+{
+    if (s_refresh_task == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    xTaskNotifyGive(s_refresh_task);
+    return ESP_OK;
+}
+
+bool market_data_is_refreshing(void)
+{
+    return s_refreshing;
 }
 
 esp_err_t market_data_copy_snapshot(market_holding_t *holdings,

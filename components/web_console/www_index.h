@@ -21,6 +21,7 @@ static const char WEB_CONSOLE_INDEX_HTML[] = R"HTML(<!DOCTYPE html>
   .kv .k{color:var(--mut);font-size:12px}
   .kv .v{font-size:16px;font-weight:600;font-family:Consolas,monospace;word-break:break-all}
   .ok{color:var(--ok)} .bad{color:var(--err)} .warn{color:var(--warn)}
+  .up{color:#ff5252;font-weight:600} .down{color:#69f0ae;font-weight:600}
   button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer}
   button.sec{background:#2b3648}
   button:hover{filter:brightness(1.1)}
@@ -41,6 +42,15 @@ static const char WEB_CONSOLE_INDEX_HTML[] = R"HTML(<!DOCTYPE html>
   <div class="card">
     <h2>运行状态 <span class="msg" id="ts"></span></h2>
     <div class="grid" id="status"><div class="kv"><div class="k">加载中…</div><div class="v">—</div></div></div>
+  </div>
+
+  <div class="card">
+    <h2>行情看板 <span class="msg" id="mmsg"></span></h2>
+    <div class="row">
+      <button id="mrefresh" onclick="marketRefresh()">立即同步并刷新</button>
+      <span class="msg" id="mmeta">等待行情数据</span>
+    </div>
+    <table id="market"><tbody><tr><td>加载中…</td></tr></tbody></table>
   </div>
 
   <div class="card">
@@ -100,7 +110,7 @@ static const char WEB_CONSOLE_INDEX_HTML[] = R"HTML(<!DOCTYPE html>
   </div>
 
   <div class="sub">
-    只读接口：<code>/api/status</code> <code>/api/logs</code> ｜ 控制接口：<code>POST /api/gpio</code>
+    只读接口：<code>/api/status</code> <code>/api/logs</code> ｜ 行情控制：<code>POST /api/market/refresh</code> ｜ 其它控制接口需 Token
   </div>
 </div>
 
@@ -132,8 +142,44 @@ async function refresh(){
     ];
     $('status').innerHTML = items.map(([k,v,c]) =>
       `<div class="kv"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`).join('');
+    renderMarket(s.market);
     $('ts').textContent = new Date().toLocaleTimeString();
   }catch(e){ $('ts').textContent = '刷新失败: ' + e; }
+}
+
+async function marketRefresh(){
+  const button = $('mrefresh');
+  button.disabled = true;
+  $('mmsg').textContent = '已请求后台刷新…';
+  try{
+    const r = await fetch(q('/api/market/refresh'), {method:'POST'});
+    const j = await r.json();
+    $('mmsg').textContent = j.ok ? '刷新任务已开始' : ('失败: ' + (j.message || j.error || r.status));
+  }catch(e){ $('mmsg').textContent = '失败: ' + e; }
+  setTimeout(() => { button.disabled = false; }, 1500);
+}
+
+function renderMarket(m){
+  const esc = value => String(value == null ? '-' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
+  if(!m){ $('market').innerHTML = '<tbody><tr><td>暂无行情状态</td></tr></tbody>'; return; }
+  const items = m.items || [];
+  const state = m.refreshing ? '刷新中…' : (m.ready ? ('已更新 ' + m.quote_ok + '/' + m.holdings) : (m.error || '等待数据'));
+  $('mmeta').textContent = state;
+  if(!items.length){
+    $('market').innerHTML = '<tbody><tr><td>暂无持仓行情</td></tr></tbody>';
+    return;
+  }
+  $('market').innerHTML = '<tbody><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌</th><th>涨跌幅</th></tr>' +
+    items.map(x => {
+      const valid = x.valid;
+      const cls = valid ? (x.percent >= 0 ? 'up' : 'down') : 'warn';
+      const price = valid ? Number(x.last).toFixed(2) : '--';
+      const change = valid ? ((x.change >= 0 ? '+' : '') + Number(x.change).toFixed(2)) : '--';
+      const percent = valid ? ((x.percent >= 0 ? '+' : '') + Number(x.percent).toFixed(2) + '%') : '--';
+      return `<tr><td>${esc(x.symbol)}</td><td>${esc(x.name)}</td><td>${price}</td><td class="${cls}">${change}</td><td class="${cls}">${percent}</td></tr>`;
+    }).join('') + '</tbody>';
 }
 
 async function loadLogs(){

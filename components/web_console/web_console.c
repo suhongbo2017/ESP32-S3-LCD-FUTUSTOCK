@@ -4,7 +4,8 @@
  *
  * 端点：
  *   GET  /                      状态页（内嵌 HTML）
- *   GET  /api/status            状态 JSON
+ *   GET  /api/status            状态 JSON（含行情快照）
+ *   POST /api/market/refresh    后台立即同步持仓并刷新行情（需 Token）
  *   GET  /api/gpio?pin=N        读 GPIO
  *   POST /api/gpio?pin=N&value=v 设置 GPIO 输出（需 Token）
  *   GET  /api/logs              列出 TF 日志
@@ -193,6 +194,8 @@ static esp_err_t h_status(httpd_req_t *req)
         cJSON_AddNumberToObject(market, "holdings", (double)market_count);
         cJSON_AddNumberToObject(market, "quote_ok", (double)market_data_quote_ok_count());
         cJSON_AddStringToObject(market, "error", market_data_last_error());
+        cJSON_AddBoolToObject(market, "refreshing", market_data_is_refreshing());
+        cJSON_AddNumberToObject(market, "last_success_ms", (double)market_data_last_success_ms());
         cJSON *items = cJSON_AddArrayToObject(market, "items");
         if (copy_err == ESP_OK) {
             for (size_t i = 0; i < market_count; i++) {
@@ -216,12 +219,30 @@ static esp_err_t h_status(httpd_req_t *req)
         cJSON_AddNumberToObject(market, "holdings", 0);
         cJSON_AddNumberToObject(market, "quote_ok", 0);
         cJSON_AddStringToObject(market, "error", "内存不足");
+        cJSON_AddBoolToObject(market, "refreshing", market_data_is_refreshing());
+        cJSON_AddNumberToObject(market, "last_success_ms", (double)market_data_last_success_ms());
     }
     free(holdings);
     free(quotes);
 #if CONFIG_WEB_CONSOLE_MDNS_ENABLE
     cJSON_AddStringToObject(o, "mdns", CONFIG_WEB_CONSOLE_MDNS_HOSTNAME);
 #endif
+    return send_json(req, o);
+}
+
+/** POST /api/market/refresh —— 请求后台立即同步持仓并刷新行情（需 Token） */
+static esp_err_t h_market_refresh_post(httpd_req_t *req)
+{
+    if (!token_ok(req)) {
+        return send_err_json(req, "unauthorized", "需要 Token");
+    }
+    esp_err_t err = market_data_request_refresh();
+    if (err != ESP_OK) {
+        return send_err_json(req, "refresh_unavailable", esp_err_to_name(err));
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", true);
+    cJSON_AddBoolToObject(o, "accepted", true);
     return send_json(req, o);
 }
 
@@ -555,7 +576,7 @@ esp_err_t web_console_init(void)
 
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.server_port      = CONFIG_WEB_CONSOLE_PORT;
-    cfg.max_uri_handlers = 12;
+    cfg.max_uri_handlers = 16;
     cfg.stack_size       = 8192;
     cfg.lru_purge_enable = true;
     cfg.uri_match_fn     = httpd_uri_match_wildcard;   /* 支持通配符路径（日志下载） */
@@ -565,6 +586,7 @@ esp_err_t web_console_init(void)
     static const httpd_uri_t uris[] = {
         { .uri = "/",                .method = HTTP_GET,  .handler = h_root },
         { .uri = "/api/status",      .method = HTTP_GET,  .handler = h_status },
+        { .uri = "/api/market/refresh", .method = HTTP_POST, .handler = h_market_refresh_post },
         { .uri = "/api/gpio",        .method = HTTP_GET,  .handler = h_gpio_get },
         { .uri = "/api/gpio",        .method = HTTP_POST, .handler = h_gpio_set },
         { .uri = "/api/logs",        .method = HTTP_GET,  .handler = h_logs_list },

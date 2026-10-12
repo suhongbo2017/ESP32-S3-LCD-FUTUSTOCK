@@ -36,6 +36,15 @@ esp_err_t market_data_init(void);
 /** 拉取持仓并立即拉取一次行情；调用应在网络已就绪后执行。 */
 esp_err_t market_data_refresh(void);
 
+/** 注册负责周期刷新的任务，使 Web 手动刷新可以立即唤醒它。 */
+void market_data_register_refresh_task(void);
+
+/** 请求后台行情任务尽快刷新；不会在调用方执行网络请求。 */
+esp_err_t market_data_request_refresh(void);
+
+/** 当前是否正在执行持仓/行情刷新。 */
+bool market_data_is_refreshing(void);
+
 /** 当前持仓/行情快照。返回只读指针，调用者不应跨刷新长期保存。 */
 size_t market_data_holding_count(void);
 const market_holding_t *market_data_holding(size_t index);

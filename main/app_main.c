@@ -347,6 +347,7 @@ static void status_task(void *arg)
 static void market_data_task(void *arg)
 {
     (void)arg;
+    market_data_register_refresh_task();
     bool refreshed = false;
     for (;;) {
         net_manager_status_t status = net_manager_get_status();
@@ -357,9 +358,9 @@ static void market_data_task(void *arg)
             ESP_LOGW(TAG, "行情刷新跳过：暂无可用网络");
         }
 
-        /* 首次联网/失败时快速重试；成功后恢复正常行情周期。 */
+        /* 定时刷新与 Web 手动刷新共用同一任务，避免并发访问行情接口。 */
         uint32_t wait_ms = refreshed ? CONFIG_MARKET_DATA_REFRESH_MS : 5000;
-        vTaskDelay(pdMS_TO_TICKS(wait_ms));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(wait_ms));
     }
 }
 
