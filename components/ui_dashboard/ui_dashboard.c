@@ -126,10 +126,11 @@ static void ui_update_market(void)
             snprintf(buf, sizeof(buf), "%-6s       --", holding->symbol);
         }
         lv_label_set_text(s_lbl_market[row], buf);
+        /* 面板为 BGR：输入蓝色值显示为红色，纯绿色保持绿色。 */
         lv_obj_set_style_text_color(s_lbl_market[row],
                                     !quote->valid ? lv_color_hex(0x90A4AE)
-                                        : quote->percent >= 0.0f ? lv_color_hex(0x69F0AE)
-                                                                  : lv_color_hex(0xFF5252),
+                                        : quote->percent >= 0.0f ? lv_color_hex(0x0000FF)
+                                                                  : lv_color_hex(0x00FF00),
                                     LV_PART_MAIN);
     }
 }
