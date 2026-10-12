@@ -23,12 +23,13 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 - TF 卡日志已启用 FatFS 长文件名堆缓冲，`log_YYYYMMDD.csv` 可正常创建、追加和通过 Web 下载。
 - Web API 采用局域网便利策略：`GET /api/status`、`GET /api/logs`、`GET /api/logs/<file>`、`GET /api/history` 和 `GET /api/config` 等只读接口免 Token；行情刷新、GPIO、配置写入、重启和 OTA 等控制接口仍要求 `X-Auth-Token`。
 - Web 控制台不再把 Token 或 WiFi 密码放入 URL；配置表单改为 POST body。
-- Token 只保存在本机未跟踪的 `sdkconfig`，不提交到 Git。设备使用普通 HTTP，Token 主要用于防止局域网误操作；需要更强隔离时应使用 IoT VLAN、防火墙或 VPN。
+- 已完成 S3 长时间稳定性验证：`COM7` 连续运行约 10 分钟，无重启或 `Guru Meditation`；ETH、WiFi、MQTT、行情和 TF 日志持续正常。
+- 已完成 Web 压力验证：约 1 分钟内轮询 `/api/status` 30 次并触发 3 次手动行情刷新，均无 HTTP 错误，行情保持 `16/16`。
 
 下一阶段：
 
-1. 完善 Web Token 鉴权并进行长时间稳定性验证。
-2. 单独验证 1.77 寸 ST7735S 的硬件连续滚动，再决定是否接入分页看板。
+1. 在独立测试模式下验证 1.77 寸 ST7735S 硬件连续滚动，确认不影响当前 LVGL 分页看板。
+2. 根据硬件滚动结果决定是否替换现有 5 秒分页。
 
 ### 构建配置
 
