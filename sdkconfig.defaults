@@ -52,8 +52,8 @@ CONFIG_LV_FONT_MONTSERRAT_16=y
 
 # 上云 Broker 已确认：broker.emqx.io:1883（匿名；详见 PINMAP.md §7）
 
-# ---- Web Console：默认保护所有 API 只读接口；Token 仅配置在本机 sdkconfig ----
-CONFIG_WEB_CONSOLE_PROTECT_READ=y
+# ---- Web Console：局域网访问免 Token；控制接口仍需 Token ----
+CONFIG_WEB_CONSOLE_PROTECT_READ=n
 # CONFIG_WEB_CONSOLE_TOKEN 请只写入本机 sdkconfig，不要提交
 
 
