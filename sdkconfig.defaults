@@ -59,7 +59,13 @@ CONFIG_LCD_ST7735_ROTATION_180=y
 # CONFIG_LCD_ST7735_ROTATION_270 is not set
 
 
-# 挂 SPI0_CS1、走 GPIO26~32，不占用 GPIO33~38，与 TF 卡(SDMMC)无冲突。
+# ---- FatFS：日志使用 log_YYYYMMDD.csv，需要启用长文件名 ----
+CONFIG_FATFS_LFN_HEAP=y
+# CONFIG_FATFS_LFN_NONE is not set
+# CONFIG_FATFS_LFN_STACK is not set
+CONFIG_FATFS_MAX_LFN=255
+
+
 # 注意：S3R8 / S3R8V 模块内置 PSRAM 为八线(OCT)方案，与本板外置 Quad 方案
 #       的 Kconfig 选择不同，勿把模块板的 OCT 配置误用到本板。
 CONFIG_SPIRAM=y
