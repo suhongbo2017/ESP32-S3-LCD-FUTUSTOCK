@@ -54,6 +54,8 @@ static const char *TAG = "lcd_st7735";
 #define ST7735_CMD_VMCTR1   0xC5   /*!< VCOM 控制 */
 #define ST7735_CMD_GMCTRP1  0xE0   /*!< 正极性 Gamma */
 #define ST7735_CMD_GMCTRN1  0xE1   /*!< 负极性 Gamma */
+#define ST7735_CMD_VSCRDEF  0x33   /*!< 垂直滚动区域定义 */
+#define ST7735_CMD_VSCSAD   0x37   /*!< 垂直滚动起始地址 */
 
 /* 诊断测试图用 RGB565（小端，绘制时按 ST7735S 大端交换后发送） */
 #define TP_RED     0xF800
@@ -543,20 +545,56 @@ esp_err_t lcd_st7735_draw_test_pattern(esp_lcd_panel_handle_t panel)
     ESP_LOGI(TAG, "测试图：整帧 %lux%lu = %lu B（RGB565 大端）",
              (unsigned long)w, (unsigned long)h, (unsigned long)(w * h * 2));
 
-    /* 整帧缓冲（DMA 内存，直接把数据交给 SPI 传输） */
-    uint16_t *buf = heap_caps_malloc((size_t)w * h * 2, MALLOC_CAP_DMA);
-    ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "测试图缓冲申请失败");
+    /* 逐行绘制，避免启动阶段申请 40KB 连续内部 DMA 缓冲失败。 */
+    uint16_t *row = heap_caps_malloc((size_t)w * sizeof(uint16_t), MALLOC_CAP_DMA);
+    ESP_RETURN_ON_FALSE(row, ESP_ERR_NO_MEM, TAG, "测试图行缓冲申请失败");
 
-    for (uint32_t y = 0; y < h; y++) {
+    esp_err_t ret = ESP_OK;
+    for (uint32_t y = 0; y < h && ret == ESP_OK; y++) {
         for (uint32_t x = 0; x < w; x++) {
-            buf[y * w + x] = tp_bswap16(tp_color_at(w, h, x, y));
+            row[x] = tp_bswap16(tp_color_at(w, h, x, y));
         }
+        ret = esp_lcd_panel_draw_bitmap(panel, 0, (int)y, (int)w, (int)y + 1, row);
     }
-
-    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel, 0, 0, (int)w, (int)h, buf);
-    heap_caps_free(buf);
+    heap_caps_free(row);
     ESP_RETURN_ON_ERROR(ret, TAG, "测试图绘制失败");
 
     ESP_LOGI(TAG, "测试图已绘制完成（观察：白边框是否裁切/偏移、三色竖带是否笔直、四角色块方位）");
     return ESP_OK;
+}
+
+esp_err_t lcd_st7735_start_scroll_test(esp_lcd_panel_handle_t panel)
+{
+    if (panel == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    st7735_panel_t *st7735 = __containerof(panel, st7735_panel_t, base);
+
+    /* 竖屏测试：固定区 0 行、滚动区覆盖整块面板、底部固定区 0 行。 */
+    uint16_t scroll_height = (uint16_t)st7735->height;
+    uint8_t def[6] = {
+        0, 0,
+        (uint8_t)(scroll_height >> 8), (uint8_t)scroll_height,
+        0, 0,
+    };
+    ESP_RETURN_ON_ERROR(lcd_tx_cmd(st7735->io, ST7735_CMD_VSCRDEF, def, sizeof(def)),
+                        TAG, "vscrdef");
+    ESP_RETURN_ON_ERROR(lcd_st7735_draw_test_pattern(panel), TAG, "滚动测试图绘制失败");
+
+    ESP_LOGI(TAG, "硬件连续滚动已启动（VSCRDEF=0..%u，VSCSAD 每 30ms 增加 2 行）",
+             (unsigned)scroll_height);
+    uint16_t start = 0;
+    uint32_t updates = 0;
+    for (;;) {
+        start = (uint16_t)((start + 2) % scroll_height);
+        uint8_t param[2] = { (uint8_t)(start >> 8), (uint8_t)start };
+        ESP_RETURN_ON_ERROR(lcd_tx_cmd(st7735->io, ST7735_CMD_VSCSAD, param, sizeof(param)),
+                            TAG, "vscsad");
+        updates++;
+        if ((updates % 33) == 0) {
+            ESP_LOGI(TAG, "硬件连续滚动运行中：VSCSAD=%u（更新=%lu）",
+                     (unsigned)start, (unsigned long)updates);
+        }
+        vTaskDelay(pdMS_TO_TICKS(30));
+    }
 }

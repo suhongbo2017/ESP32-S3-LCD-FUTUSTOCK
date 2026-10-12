@@ -508,7 +508,10 @@ esp_err_t ui_dashboard_init(void)
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(panel), TAG, "面板复位失败");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_init(panel), TAG, "面板初始化失败");
 
-#if defined(CONFIG_LCD_ST7735_TEST_PATTERN)
+#if defined(CONFIG_LCD_ST7735_SCROLL_TEST)
+    ESP_ERROR_CHECK(lcd_st7735_start_scroll_test(panel));
+    ESP_LOGI(TAG, "硬件连续滚动测试运行中（VSCRDEF/VSCSAD，未启动 LVGL 看板）");
+#elif defined(CONFIG_LCD_ST7735_TEST_PATTERN)
     /* == 诊断模式：绕过 LVGL，只绘制测试图（供校准 ROTATION / OFFSET / 裁切 / 斜切）== */
     ESP_RETURN_ON_ERROR(lcd_st7735_draw_test_pattern(panel), TAG, "测试图绘制失败");
     ESP_LOGI(TAG, "测试图诊断模式运行中（未启动 LVGL 看板，调试完成后关闭 TEST_PATTERN）");

@@ -89,6 +89,9 @@ esp_err_t lcd_st7735_get_resolution(esp_lcd_panel_handle_t panel,
  */
 esp_err_t lcd_st7735_draw_test_pattern(esp_lcd_panel_handle_t panel);
 
+/** @brief 启动硬件 VSCRDEF/VSCSAD 连续滚动测试（仅诊断模式使用）。 */
+esp_err_t lcd_st7735_start_scroll_test(esp_lcd_panel_handle_t panel);
+
 #ifdef __cplusplus
 }
 #endif

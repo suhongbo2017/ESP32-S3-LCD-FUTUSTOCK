@@ -381,9 +381,19 @@ void app_main(void)
     ESP_ERROR_CHECK(app_cfg_init());
     log_heap("app_cfg");
 
-    /* 1) 有线主链路（NULL = 使用 Kconfig 默认配置：DHCP 或静态 IP） */
+    /* 1) 有线主链路（LCD RST 与 W5500 共用 GPIO15，面板初始化须在其后） */
     ESP_ERROR_CHECK(net_eth_init(NULL));
     log_heap("net_eth");
+
+#if defined(CONFIG_LCD_ST7735_SCROLL_TEST) || defined(CONFIG_LCD_ST7735_TEST_PATTERN)
+    /* 诊断固件必须在创建行情、状态、时间同步等任务前退出正常启动路径。
+       这些任务可能访问尚未初始化的 LVGL；测试模式本身由 LCD 函数阻塞运行。 */
+    ESP_LOGI(TAG, "LCD 诊断模式已启用，跳过网络业务/LVGL 初始化");
+    if (ui_dashboard_init() != ESP_OK) {
+        ESP_LOGE(TAG, "LCD 诊断模式初始化失败");
+    }
+    return;
+#endif
 
     /* 2) Wi-Fi 备用链路（SSID/密码在 menuconfig 中配置） */
     ESP_ERROR_CHECK(net_wifi_init());

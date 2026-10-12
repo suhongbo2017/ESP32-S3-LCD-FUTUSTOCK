@@ -80,6 +80,14 @@ config LCD_ST7735_INVERT_COLOR
     bool "颜色反转（画面负片时打开）"
     default n
 
+config LCD_ST7735_SCROLL_TEST
+    bool "硬件连续滚动测试（绕过 LVGL，VSCRDEF/VSCSAD）"
+    default n
+    depends on LCD_ST7735_TEST_PATTERN
+    help
+        开启后绘制测试图并使用 ST7735S VSCRDEF/VSCSAD 持续滚动。
+        该模式不会启动 LVGL，仅用于确认面板硬件滚动能力。
+
 config LCD_ST7735_TEST_PATTERN
     bool "测试图诊断模式（绕过 LVGL，固定绘制诊断图）"
     default n
