@@ -21,6 +21,8 @@ ESP32-S3 + 1.77" ST7735S 行情看板，目标是迁移 futu-tracker 动态持�
 - Web 首页已增加行情看板：显示持仓、现价、涨跌额、涨跌幅和状态。
 - Web 已增加 `POST /api/market/refresh`，通过后台行情任务异步触发持仓同步和行情刷新。
 - TF 卡日志已启用 FatFS 长文件名堆缓冲，`log_YYYYMMDD.csv` 可正常创建、追加和通过 Web 下载。
+- Web API 已默认启用 Token 保护：只读和控制接口均要求 `X-Auth-Token`，首页仍可公开打开用于输入 Token。
+- Web 控制台不再把 Token 或 WiFi 密码放入 URL；配置表单改为 POST body。
 
 下一阶段：
 
@@ -58,7 +60,7 @@ API 密码只保存在本机 `sdkconfig`，不要提交到仓库。
 }
 ```
 
-只读接口沿用 Web 控制台现有鉴权策略；当启用 `CONFIG_WEB_CONSOLE_PROTECT_READ` 时需要 Token。
+只读接口沿用 Web 控制台现有鉴权策略；当前默认要求 `X-Auth-Token`。Token 只保存在本机未跟踪的 `sdkconfig`，访问首页后在“访问鉴权”区域输入。
 
 第三阶段已在本机 ESP-IDF 5.5.5 环境完成编译验证，并在 ESP32-S3 `COM7` 实机烧录验证：
 

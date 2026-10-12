@@ -52,7 +52,11 @@ CONFIG_LV_FONT_MONTSERRAT_16=y
 
 # 上云 Broker 已确认：broker.emqx.io:1883（匿名；详见 PINMAP.md §7）
 
-# ---- LCD：实机屏幕上下方向需旋转 180° ----
+# ---- Web Console：默认保护所有 API 只读接口；Token 仅配置在本机 sdkconfig ----
+CONFIG_WEB_CONSOLE_PROTECT_READ=y
+# CONFIG_WEB_CONSOLE_TOKEN 请只写入本机 sdkconfig，不要提交
+
+
 CONFIG_LCD_ST7735_ROTATION_180=y
 # CONFIG_LCD_ST7735_ROTATION_0 is not set
 # CONFIG_LCD_ST7735_ROTATION_90 is not set

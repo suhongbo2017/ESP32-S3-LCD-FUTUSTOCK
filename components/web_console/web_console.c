@@ -12,7 +12,8 @@
  *   GET  /api/logs/<file>       下载 TF 日志（防目录穿越）
  *
  * 安全：
- *   - 控制类接口校验 Token（URL 参数 ?token= 或请求头 X-Auth-Token）
+ *   - 控制类接口校验 Token；所有 API 请求通过请求头 X-Auth-Token 传入
+ *   - 首页可公开打开，仅用于输入 Token；日志和控制接口不接受 URL 中的 token
  *   - GPIO 仅允许白名单引脚（GPIO1–9 / 39–42 / 47–48）
  */
 #include "web_console.h"
@@ -52,6 +53,8 @@ static const char *TAG = "web_console";
 
 static httpd_handle_t s_server = NULL;
 
+static esp_err_t send_err_json(httpd_req_t *req, const char *code, const char *msg);
+
 /* GPIO 方向记录：0=未知 1=输入 2=输出（读操作不破坏已设置的输出） */
 #define PIN_MAX 64
 static uint8_t s_pin_dir[PIN_MAX];
@@ -72,19 +75,15 @@ static bool token_ok(httpd_req_t *req)
         return true;    /* 未配置口令（不建议） */
     }
     char val[64] = { 0 };
-    if (httpd_req_get_hdr_value_str(req, "X-Auth-Token", val, sizeof(val)) == ESP_OK &&
-        strcmp(val, CONFIG_WEB_CONSOLE_TOKEN) == 0) {
-        return true;
-    }
-    char qs[160];
-    if (httpd_req_get_url_query_str(req, qs, sizeof(qs)) == ESP_OK) {
-        char t[64] = { 0 };
-        if (httpd_query_key_value(qs, "token", t, sizeof(t)) == ESP_OK &&
-            strcmp(t, CONFIG_WEB_CONSOLE_TOKEN) == 0) {
-            return true;
-        }
-    }
-    return false;
+    return httpd_req_get_hdr_value_str(req, "X-Auth-Token", val, sizeof(val)) == ESP_OK &&
+           strcmp(val, CONFIG_WEB_CONSOLE_TOKEN) == 0;
+}
+
+static esp_err_t send_unauthorized(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "401 Unauthorized");
+    httpd_resp_set_hdr(req, "WWW-Authenticate", "Bearer realm=\"web-console\"");
+    return send_err_json(req, "unauthorized", "需要 Token");
 }
 
 /** 只读接口是否放行 */
@@ -139,10 +138,6 @@ static esp_err_t send_err_json(httpd_req_t *req, const char *code, const char *m
 
 static esp_err_t h_root(httpd_req_t *req)
 {
-    if (!read_ok(req)) {
-        httpd_resp_set_status(req, "401 Unauthorized");
-        return httpd_resp_sendstr(req, "401: 需要 Token");
-    }
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     return httpd_resp_sendstr(req, WEB_CONSOLE_INDEX_HTML);
 }
@@ -150,7 +145,7 @@ static esp_err_t h_root(httpd_req_t *req)
 static esp_err_t h_status(httpd_req_t *req)
 {
     if (!read_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
 
     net_manager_status_t st = net_manager_get_status();
@@ -234,7 +229,7 @@ static esp_err_t h_status(httpd_req_t *req)
 static esp_err_t h_market_refresh_post(httpd_req_t *req)
 {
     if (!token_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     esp_err_t err = market_data_request_refresh();
     if (err != ESP_OK) {
@@ -250,7 +245,7 @@ static esp_err_t h_market_refresh_post(httpd_req_t *req)
 static esp_err_t h_gpio_get(httpd_req_t *req)
 {
     if (!read_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     int pin = query_int(req, "pin", -1);
     if (!pin_allowed(pin)) {
@@ -273,7 +268,7 @@ static esp_err_t h_gpio_get(httpd_req_t *req)
 static esp_err_t h_gpio_set(httpd_req_t *req)
 {
     if (!token_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token（?token= 或 X-Auth-Token）");
+        return send_unauthorized(req);
     }
     int pin = query_int(req, "pin", -1);
     int val = query_int(req, "value", -1);
@@ -302,7 +297,7 @@ static esp_err_t h_gpio_set(httpd_req_t *req)
 static esp_err_t h_logs_list(httpd_req_t *req)
 {
     if (!read_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     cJSON *o = cJSON_CreateObject();
     cJSON *arr = cJSON_AddArrayToObject(o, "files");
@@ -339,7 +334,7 @@ static esp_err_t h_logs_list(httpd_req_t *req)
 static esp_err_t h_logs_get(httpd_req_t *req)
 {
     if (!read_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     const char *name = req->uri + strlen(URI_LOGS_PREFIX);
     if (*name == '\0' || strstr(name, "..") != NULL || strchr(name, '/') != NULL) {
@@ -394,7 +389,7 @@ static void url_decode(char *s)
 static esp_err_t h_config_get(httpd_req_t *req)
 {
     if (!read_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     const app_cfg_t *c = app_cfg_get();
     cJSON *o = cJSON_CreateObject();
@@ -413,10 +408,23 @@ static esp_err_t h_config_get(httpd_req_t *req)
 static esp_err_t h_config_post(httpd_req_t *req)
 {
     if (!token_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     char qs[512];
-    if (httpd_req_get_url_query_str(req, qs, sizeof(qs)) != ESP_OK) {
+    int qs_len = 0;
+    if (req->content_len > 0) {
+        if (req->content_len >= sizeof(qs)) {
+            return send_err_json(req, "bad_query", "参数过长");
+        }
+        while (qs_len < req->content_len) {
+            int n = httpd_req_recv(req, qs + qs_len, req->content_len - qs_len);
+            if (n <= 0) {
+                return send_err_json(req, "bad_body", "参数接收失败");
+            }
+            qs_len += n;
+        }
+        qs[qs_len] = '\0';
+    } else if (httpd_req_get_url_query_str(req, qs, sizeof(qs)) != ESP_OK) {
         return send_err_json(req, "bad_query", "缺少参数");
     }
     char act[16] = { 0 };
@@ -459,7 +467,7 @@ static esp_err_t h_config_post(httpd_req_t *req)
 static esp_err_t h_ota_post(httpd_req_t *req)
 {
     if (!token_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
     if (part == NULL) {
@@ -502,7 +510,7 @@ static esp_err_t h_ota_post(httpd_req_t *req)
 static esp_err_t h_history(httpd_req_t *req)
 {
     if (!read_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     const int MAXN = 240;
     sensor_sample_t *buf = malloc(sizeof(sensor_sample_t) * MAXN);
@@ -537,7 +545,7 @@ static esp_err_t h_history(httpd_req_t *req)
 static esp_err_t h_reboot_post(httpd_req_t *req)
 {
     if (!token_ok(req)) {
-        return send_err_json(req, "unauthorized", "需要 Token");
+        return send_unauthorized(req);
     }
     ESP_LOGI(TAG, "收到重启请求，2 秒后重启");
     httpd_resp_set_type(req, "application/json");

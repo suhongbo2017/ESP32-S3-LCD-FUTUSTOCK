@@ -40,6 +40,16 @@ static const char WEB_CONSOLE_INDEX_HTML[] = R"HTML(<!DOCTYPE html>
   <div class="sub" id="host">—</div>
 
   <div class="card">
+    <h2>访问鉴权 <span class="msg" id="amsg"></span></h2>
+    <div class="row">
+      <input id="token" type="password" placeholder="输入 Web Token" autocomplete="off" style="flex:1">
+      <button onclick="saveToken()">保存 Token</button>
+      <button class="sec" onclick="clearToken()">清除</button>
+    </div>
+    <div class="msg">Token 仅保存在当前浏览器，用于访问状态、日志和控制接口。</div>
+  </div>
+
+  <div class="card">
     <h2>运行状态 <span class="msg" id="ts"></span></h2>
     <div class="grid" id="status"><div class="kv"><div class="k">加载中…</div><div class="v">—</div></div></div>
   </div>
@@ -118,11 +128,36 @@ static const char WEB_CONSOLE_INDEX_HTML[] = R"HTML(<!DOCTYPE html>
 const $ = id => document.getElementById(id);
 /* 鉴权默认关闭（CONFIG_WEB_CONSOLE_TOKEN 为空）；若启用，可从本机 localStorage 自动带上 */
 let token = localStorage.getItem('gw_token') || '';
-function q(path){ return path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token); }
+$('token').value = token;
+function saveToken(){
+  token = $('token').value.trim();
+  localStorage.setItem('gw_token', token);
+  $('amsg').textContent = token ? 'Token 已保存' : 'Token 为空';
+  refresh(); loadLogs(); drawChart();
+}
+function clearToken(){
+  token = '';
+  localStorage.removeItem('gw_token');
+  $('token').value = '';
+  $('amsg').textContent = 'Token 已清除';
+}
+function authHeaders(extra){
+  const headers = new Headers(extra || {});
+  if(token) headers.set('X-Auth-Token', token);
+  return headers;
+}
+async function apiFetch(path, options){
+  const opts = Object.assign({}, options || {}, {headers: authHeaders(options && options.headers)});
+  const response = await fetch(path, opts);
+  if(response.status === 401 || response.status === 403){
+    $('amsg').textContent = 'Token 无效或未提供';
+  }
+  return response;
+}
 
 async function refresh(){
   try{
-    const r = await fetch('/api/status');
+    const r = await apiFetch('/api/status');
     const s = await r.json();
     $('host').textContent = location.host + ' · ' + (s.mdns ? ('http://' + s.mdns + '.local') : '');
     const up = (s.uptime|0);
@@ -152,7 +187,7 @@ async function marketRefresh(){
   button.disabled = true;
   $('mmsg').textContent = '已请求后台刷新…';
   try{
-    const r = await fetch(q('/api/market/refresh'), {method:'POST'});
+    const r = await apiFetch('/api/market/refresh', {method:'POST'});
     const j = await r.json();
     $('mmsg').textContent = j.ok ? '刷新任务已开始' : ('失败: ' + (j.message || j.error || r.status));
   }catch(e){ $('mmsg').textContent = '失败: ' + e; }
@@ -182,27 +217,40 @@ function renderMarket(m){
     }).join('') + '</tbody>';
 }
 
+async function downloadLog(encodedName){
+  try{
+    const r = await apiFetch('/api/logs/' + encodedName);
+    if(!r.ok){ throw new Error('HTTP ' + r.status); }
+    const blob = await r.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = decodeURIComponent(encodedName);
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }catch(e){ $('amsg').textContent = '日志下载失败: ' + e; }
+}
+
 async function loadLogs(){
   try{
-    const r = await fetch('/api/logs'); const j = await r.json();
+    const r = await apiFetch('/api/logs'); const j = await r.json();
     if(!j.files || !j.files.length){ $('logs').innerHTML = '<tbody><tr><td>（无文件）</td></tr></tbody>'; return; }
     $('logs').innerHTML = '<tbody><tr><th>文件</th><th>大小</th><th></th></tr>' +
       j.files.map(f => `<tr><td>${f.name}</td><td>${(f.size/1024).toFixed(1)} KB</td>
-        <td><a href="/api/logs/${encodeURIComponent(f.name)}" target="_blank">下载</a></td></tr>`).join('') +
+        <td><button class="sec" data-file="${encodeURIComponent(f.name)}" onclick="downloadLog(this.dataset.file)">下载</button></td></tr>`).join('') +
       '</tbody>';
   }catch(e){ $('logs').innerHTML = '<tbody><tr><td>获取失败</td></tr></tbody>'; }
 }
 
 async function gpioRead(){
   try{
-    const r = await fetch('/api/gpio?pin=' + $('pin').value);
+    const r = await apiFetch('/api/gpio?pin=' + $('pin').value);
     const j = await r.json();
     $('gmsg').textContent = j.ok ? ('GPIO' + j.pin + ' 电平=' + j.level) : ('失败: ' + j.error);
   }catch(e){ $('gmsg').textContent = '失败: ' + e; }
 }
 async function gpioSet(v){
   try{
-    const r = await fetch(q('/api/gpio?pin=' + $('pin').value + '&value=' + v), {method:'POST'});
+    const r = await apiFetch('/api/gpio?pin=' + $('pin').value + '&value=' + v, {method:'POST'});
     const j = await r.json();
     $('gmsg').textContent = j.ok ? ('GPIO' + j.pin + ' 已置' + (v ? '高' : '低')) : ('失败: ' + (j.error||r.status));
   }catch(e){ $('gmsg').textContent = '失败: ' + e; }
@@ -214,7 +262,7 @@ setInterval(refresh, 2000);
 /* ---- 温湿度曲线（纯 SVG，无外部库） ---- */
 async function drawChart(){
   try{
-    const j = await (await fetch('/api/history')).json();
+    const j = await (await apiFetch('/api/history')).json();
     const it = j.items || [];
     $('hcnt').textContent = j.count || 0;
     if (it.length < 2){
@@ -256,7 +304,7 @@ async function drawChart(){
 /* ---- 参数配置 ---- */
 async function cfgLoad(){
   try{
-    const c = await (await fetch('/api/config')).json();
+    const c = await (await apiFetch('/api/config')).json();
     $('c_ssid').value = c.wifi_ssid || '';
     $('c_host').value = c.mqtt_host || '';
     $('c_port').value = c.mqtt_port || '';
@@ -270,15 +318,18 @@ async function cfgSave(){
   const put = (k,id) => { const v = $(id).value.trim(); if (v) p.set(k, v); };
   put('wifi_ssid','c_ssid'); put('wifi_pass','c_pass'); put('mqtt_host','c_host');
   put('mqtt_port','c_port'); put('topic_notify','c_tn'); put('topic_sensor','c_ts');
-  p.set('token', token);
   try{
-    const j = await (await fetch('/api/config?' + p.toString(), {method:'POST'})).json();
+    const j = await (await apiFetch('/api/config', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:p.toString()
+    })).json();
     $('cmsg').textContent = j.ok ? ('已保存 ' + j.applied + ' 项，重启生效') : ('失败: ' + (j.error || j.message));
   }catch(e){ $('cmsg').textContent = '失败: ' + e; }
 }
 async function cfgReset(){
   try{
-    const j = await (await fetch(q('/api/config?action=reset'), {method:'POST'})).json();
+    const j = await (await apiFetch('/api/config?action=reset', {method:'POST'})).json();
     $('cmsg').textContent = j.ok ? '已恢复默认，重启生效' : '失败';
   }catch(e){ $('cmsg').textContent = '失败: ' + e; }
 }
@@ -287,7 +338,7 @@ async function cfgReset(){
 async function reboot(skipConfirm){
   if (!skipConfirm && !confirm('确定重启设备？')) return;
   $('cmsg').textContent = '设备重启中…（约 20 秒后恢复）';
-  try{ await fetch(q('/api/reboot'), {method:'POST'}); }catch(e){ /* 重启会断开连接，属正常 */ }
+  try{ await apiFetch('/api/reboot', {method:'POST'}); }catch(e){ /* 重启会断开连接，属正常 */ }
 }
 async function saveAndReboot(){
   await cfgSave();
@@ -300,7 +351,7 @@ async function ota(){
   if (!f) { $('omsg').textContent = '请先选择固件文件'; return; }
   $('omsg').textContent = '上传中 ' + (f.size/1048576).toFixed(2) + ' MB …（约 1 分钟，请勿断电）';
   try{
-    const j = await (await fetch(q('/api/ota'), {method:'POST', body:f})).json();
+    const j = await (await apiFetch('/api/ota', {method:'POST', body:f})).json();
     $('omsg').textContent = j.ok ? '升级成功，设备重启中…' : ('失败: ' + (j.error || j.message));
   }catch(e){ $('omsg').textContent = '连接中断（设备可能已升级并重启）'; }
 }

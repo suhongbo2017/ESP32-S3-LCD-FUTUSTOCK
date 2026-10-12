@@ -22,11 +22,10 @@ config WEB_CONSOLE_TOKEN
     string "控制操作口令 Token（留空=不校验，不安全）"
     default ""
     help
-        仅对“控制类”接口（如 GPIO 设置）校验。可通过 URL 参数 ?token=xxx
-        或请求头 X-Auth-Token 传入。
+        仅对“控制类”接口（如 GPIO 设置）校验。通过请求头 X-Auth-Token 传入，避免将口令放入 URL。
 
 config WEB_CONSOLE_PROTECT_READ
     bool "只读接口（状态/日志/截图）也要求 Token"
-    default n
+    default y
 
 endmenu
